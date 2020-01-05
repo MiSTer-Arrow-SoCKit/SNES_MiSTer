@@ -56,7 +56,7 @@ architecture rtl of P65C816 is
 	signal WAIExec, STPExec : std_logic;
 	signal NMI_SYNC, IRQ_SYNC : std_logic;
 	signal NMI_ACTIVE, IRQ_ACTIVE : std_logic;
-	signal OLD_NMI_N, OLD_NMI2_N : std_logic;
+	signal OLD_NMI_N : std_logic;
 	signal ADDR_BUS : std_logic_vector(23 downto 0);
 	
 	-- ALU 
@@ -473,48 +473,6 @@ begin
 	process(CLK, RST_N)
 	begin
 		if RST_N = '0' then
-			IsResetInterrupt <= '1';
-			IsNMIInterrupt <= '0';
-			IsIRQInterrupt <= '0';
-			GotInterrupt <= '1';
-			NMI_ACTIVE <= '0';
-			IRQ_ACTIVE <= '0';
-			OLD_NMI2_N <= '1';
-		elsif rising_edge(CLK) then
-			if RDY_IN = '1' and CE = '1' then
-				if IsResetInterrupt = '0' then
-					OLD_NMI2_N <= NMI_N;
-					if NMI_N = '0' and OLD_NMI2_N = '1' then
-						NMI_ACTIVE <= '1';
-					end if;
-					IRQ_ACTIVE <= not IRQ_N;
-				end if;
-				
-				if LAST_CYCLE = '1' and EN = '1' then
-					if GotInterrupt = '0' then
-						GotInterrupt <= (IRQ_ACTIVE and not P(2)) or NMI_ACTIVE;
-						if NMI_ACTIVE = '1' then
-							NMI_ACTIVE <= '0';
-						end if;
-					else
-						GotInterrupt <= '0';
-					end if;
-					
-					IsResetInterrupt <= '0';
-					IsNMIInterrupt <= NMI_ACTIVE;
-					IsIRQInterrupt <= IRQ_ACTIVE and not P(2);
-				end if;
-			end if;
-		end if;
-	end process; 
-	
-	IsBRKInterrupt <= '1' when IR = x"00" else '0';
-	IsCOPInterrupt <= '1' when IR = x"02" else '0';
-	IsABORTInterrupt <= '0';
-	
-	process(CLK, RST_N)
-	begin
-		if RST_N = '0' then
 			OLD_NMI_N <= '1';
 			NMI_SYNC <= '0';
 			IRQ_SYNC <= '0';
@@ -530,6 +488,40 @@ begin
 			end if;
 		end if;
 	end process; 
+	
+	process(CLK, RST_N)
+	begin
+		if RST_N = '0' then
+			IsResetInterrupt <= '1';
+			IsNMIInterrupt <= '0';
+			IsIRQInterrupt <= '0';
+			GotInterrupt <= '1';
+			NMI_ACTIVE <= '0';
+			IRQ_ACTIVE <= '0';
+		elsif rising_edge(CLK) then
+			if RDY_IN = '1' and CE = '1' then
+				NMI_ACTIVE <= NMI_SYNC;
+				IRQ_ACTIVE <= not IRQ_N;
+				
+				if LAST_CYCLE = '1' and EN = '1' then
+					if GotInterrupt = '0' then
+						GotInterrupt <= (IRQ_ACTIVE and not P(2)) or NMI_ACTIVE;
+						NMI_ACTIVE <= '0';
+					else
+						GotInterrupt <= '0';
+					end if;
+					
+					IsResetInterrupt <= '0';
+					IsNMIInterrupt <= NMI_ACTIVE;
+					IsIRQInterrupt <= IRQ_ACTIVE and not P(2);
+				end if;
+			end if;
+		end if;
+	end process; 
+	
+	IsBRKInterrupt <= '1' when IR = x"00" else '0';
+	IsCOPInterrupt <= '1' when IR = x"02" else '0';
+	IsABORTInterrupt <= '0';
 	
 	process(CLK, RST_N)
 	begin
@@ -642,7 +634,7 @@ begin
 		end if;
 		
 		VDA <= MC.VA(1);
-		VPA <= MC.VA(0) or (twoCls and ((IRQ_ACTIVE and not P(2)) or NMI_ACTIVE)) or softInt;
+		VPA <= MC.VA(0) or (twoCls and (IRQ_ACTIVE or NMI_ACTIVE)) or softInt;
 	end process;
 	
 	RDY_OUT <= EN;
